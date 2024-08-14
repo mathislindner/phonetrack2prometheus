@@ -37,8 +37,7 @@ def requires_auth(f):
 def receive_json():
     if request.is_json:
         data = request.get_json()
-        # Here you would send the data to Prometheus
-        # For now, we'll just return it in the response for debugging purposes
+        print(data)
         return jsonify({"status": "success", "data": data}), 200
     else:
         return jsonify({"status": "failure", "message": "Request body must be JSON"}), 400
