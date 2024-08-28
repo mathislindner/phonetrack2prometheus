@@ -13,6 +13,7 @@ app = Flask(__name__)
 # Setup logging
 logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for detailed output
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Retrieve the credentials from the environment variables
 USERNAME = os.getenv("FLASK_USERNAME")
