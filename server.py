@@ -11,6 +11,8 @@ app = Flask(__name__)
 # Retrieve the credentials from the environment variables
 USERNAME = os.getenv("FLASK_USERNAME")
 PASSWORD = os.getenv("FLASK_PASSWORD")
+FLASK_HOST = os.getenv("FLASK_HOST")
+FLASK_PORT = os.getenv("FLASK_PORT")
 
 def check_auth(username, password):
     """Check if a username/password combination is valid."""
@@ -38,6 +40,7 @@ def receive_json():
     if request.is_json:
         data = request.get_json()
         print(data)
+        #{'_type': 'location', 'acc': '6.5', 'alt': '548.0', 'batt': '16.0', 'lat': '48.17933688405901', 'lon': '11.584300138056278', 'tst': 1724859867, 'vel': 0, 'tid': 'SM-A546B (PhoneTrack/Android)'}
         return jsonify({"status": "success", "data": data}), 200
     else:
         return jsonify({"status": "failure", "message": "Request body must be JSON"}), 400
@@ -48,4 +51,4 @@ def health_check():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host=FLASK_HOST, port=FLASK_PORT)
