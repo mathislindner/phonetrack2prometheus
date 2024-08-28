@@ -56,6 +56,7 @@ def health_check():
 @app.route('/metrics', methods=['GET'])
 @requires_auth
 def metrics():
+    logger.debug("Metrics endpoint reached")
     # Expose the metrics for Prometheus scraping
     return Response(generate_latest(registry), mimetype=CONTENT_TYPE_LATEST)
 
