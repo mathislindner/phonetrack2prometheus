@@ -1,18 +1,33 @@
 from flask import Flask, request, jsonify, Response
 from functools import wraps
 import os
+import logging
 from dotenv import load_dotenv
+from prometheus_client import CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 
+# Setup logging
+logging.basicConfig(level=logging.DEBUG)  # Set to DEBUG for detailed output
+logger = logging.getLogger(__name__)
+
 # Retrieve the credentials from the environment variables
 USERNAME = os.getenv("FLASK_USERNAME")
 PASSWORD = os.getenv("FLASK_PASSWORD")
 FLASK_HOST = os.getenv("FLASK_HOST")
 FLASK_PORT = os.getenv("FLASK_PORT")
+
+# Create Prometheus registry
+registry = CollectorRegistry()
+
+# Define your metrics (Gauges, Counters, etc.)
+location_lat = Gauge('device_latitude', 'Latitude of the device', registry=registry)
+location_lon = Gauge('device_longitude', 'Longitude of the device', registry=registry)
+battery_level = Gauge('device_battery_level', 'Battery level of the device', registry=registry)
+velocity = Gauge('device_velocity', 'Velocity of the device', registry=registry)
 
 def check_auth(username, password):
     """Check if a username/password combination is valid."""
@@ -34,21 +49,68 @@ def requires_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "success", "message": "Server is healthy"}), 200
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    # Expose the metrics for Prometheus scraping
+    return Response(generate_latest(registry), mimetype=CONTENT_TYPE_LATEST)
+
+def process_json(data):
+    """Processes a single JSON object and updates Prometheus metrics."""
+    try:
+        lat = float(data['lat'])
+        lon = float(data['lon'])
+        batt = float(data['batt'])
+        vel = float(data['vel'])
+
+        # Update Prometheus metrics
+        location_lat.set(lat)
+        location_lon.set(lon)
+        battery_level.set(batt)
+        velocity.set(vel)
+
+        logger.debug(f"Processed data: lat={lat}, lon={lon}, batt={batt}, vel={vel}")
+        return True
+    except (KeyError, ValueError) as e:
+        logger.error(f"Error processing data: {data}. Error: {e}")
+        return False
+
 @app.route('/api', methods=['POST'])
 @requires_auth
 def receive_json():
     if request.is_json:
         data = request.get_json()
-        print(data)
-        #{'_type': 'location', 'acc': '6.5', 'alt': '548.0', 'batt': '16.0', 'lat': '48.17933688405901', 'lon': '11.584300138056278', 'tst': 1724859867, 'vel': 0, 'tid': 'SM-A546B (PhoneTrack/Android)'}
-        return jsonify({"status": "success", "data": data}), 200
+
+        # Check if the data is a list (i.e., multiple JSONs sent at once)
+        if isinstance(data, list):
+            logger.debug(f"Received a batch of {len(data)} JSON objects.")
+            successes, failures = 0, 0
+
+            for item in data:
+                if process_json(item):
+                    successes += 1
+                else:
+                    failures += 1
+
+            return jsonify({
+                "status": "success",
+                "message": f"Processed {successes} JSON objects, {failures} failed."
+            }), 200
+
+        # Handle single JSON object
+        elif isinstance(data, dict):
+            logger.debug("Received a single JSON object.")
+            if process_json(data):
+                return jsonify({"status": "success", "message": "Processed JSON"}), 200
+            else:
+                return jsonify({"status": "failure", "message": "Error processing JSON"}), 400
+
     else:
+        logger.warning("Request body is not JSON.")
         return jsonify({"status": "failure", "message": "Request body must be JSON"}), 400
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({"status": "success", "message": "Server is healthy"}), 200
-
 
 if __name__ == '__main__':
     app.run(host=FLASK_HOST, port=FLASK_PORT)
