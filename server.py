@@ -54,6 +54,7 @@ def health_check():
     return jsonify({"status": "success", "message": "Server is healthy"}), 200
 
 @app.route('/metrics', methods=['GET'])
+@requires_auth
 def metrics():
     # Expose the metrics for Prometheus scraping
     return Response(generate_latest(registry), mimetype=CONTENT_TYPE_LATEST)
