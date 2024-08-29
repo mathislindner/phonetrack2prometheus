@@ -28,8 +28,9 @@ registry = CollectorRegistry()
 location_lat = Gauge('device_latitude', 'Latitude of the device', registry=registry)
 location_lon = Gauge('device_longitude', 'Longitude of the device', registry=registry)
 battery_level = Gauge('device_battery_level', 'Battery level of the device', registry=registry)
-velocity = Gauge('device_velocity', 'Velocity of the device', registry=registry)
+#velocity = Gauge('device_velocity', 'Velocity of the device', registry=registry)
 altitude = Gauge('device_altitude', 'Altitude of the device', registry=registry)
+accuracy = Gauge('device_accuracy', 'Accuracy of the device', registry=registry)
 
 def check_auth(username, password):
     """Check if a username/password combination is valid."""
@@ -70,14 +71,17 @@ def process_json(data):
         batt = float(data['batt'])
         #vel = float(data['vel'])
         alt = float(data['alt'])
+        acc = float(data['acc'])
+
         # Update Prometheus metrics
         location_lat.set(lat)
         location_lon.set(lon)
         battery_level.set(batt)
         #velocity.set(vel)
         altitude.set(alt)
+        accuracy.set(acc)
 
-        logger.debug(f"Processed data: lat={lat}, lon={lon}, batt={batt}, vel={vel}")
+        logger.debug(f"Processed data: lat={lat}, lon={lon}, batt={batt}, alt={alt}, acc={acc}")
         return True
     except (KeyError, ValueError) as e:
         logger.error(f"Error processing data: {data}. Error: {e}")
