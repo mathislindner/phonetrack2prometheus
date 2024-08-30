@@ -66,12 +66,12 @@ def metrics():
 def process_json(data):
     """Processes a single JSON object and updates Prometheus metrics."""
     try:
-        lat = float(data['lat'])
-        lon = float(data['lon'])
-        batt = float(data['batt'])
+        lat = float(data.get('lat', 0))
+        lon = float(data.get('lon', 0))
+        batt = float(data.get('batt', 0))
         #vel = float(data['vel'])
-        alt = float(data['alt'])
-        acc = float(data['acc'])
+        alt = float(data.get('alt', 0))
+        acc = float(data.get('acc', 0))
 
         # Update Prometheus metrics
         location_lat.set(lat)
@@ -83,7 +83,7 @@ def process_json(data):
 
         logger.debug(f"Processed data: lat={lat}, lon={lon}, batt={batt}, alt={alt}, acc={acc}")
         return True
-    except (KeyError, ValueError) as e:
+    except (ValueError) as e:
         logger.error(f"Error processing data: {data}. Error: {e}")
         return False
 
