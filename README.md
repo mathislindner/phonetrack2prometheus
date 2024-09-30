@@ -8,8 +8,19 @@ FLASK_PASSWORD=YOURWELLSECUREDPW
 FLASK_HOST=0.0.0.0
 FLASK_PORT=5000
 ```
-2. make sure you configure prometheus accordingly
+2. make sure you configure prometheus accordingly:
+```
+- job_name: 'phonetrack'
+    scheme: https
+    static_configs:
+      - targets: ['address.to.server.that.hosts.phonetrack2prometheus']
+    basic_auth:
+      username: 'USERNAME'
+      password: 'YOURWELLSECUREDPW'
+
+```
 3. (optional) use grafana to display the metrics (I may publish my dashboard sometime)
+4. configure phontrack on your phone with authentication 
 
 ## Notes
 - Will only work when the phone is online, does not store the time when stat was sent from phone
