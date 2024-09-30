@@ -28,9 +28,18 @@ registry = CollectorRegistry()
 location_lat = Gauge('device_latitude', 'Latitude of the device', registry=registry)
 location_lon = Gauge('device_longitude', 'Longitude of the device', registry=registry)
 battery_level = Gauge('device_battery_level', 'Battery level of the device', registry=registry)
-#velocity = Gauge('device_velocity', 'Velocity of the device', registry=registry)
+velocity = Gauge('device_velocity', 'Velocity of the device', registry=registry)
 altitude = Gauge('device_altitude', 'Altitude of the device', registry=registry)
 accuracy = Gauge('device_accuracy', 'Accuracy of the device', registry=registry)
+
+prometheus_obj_and_parameters = [(
+    location_lat, 'lat'),
+    (location_lon, 'lon'),
+    (battery_level, 'batt'),
+    (velocity, 'vel'),
+    (altitude, 'alt'),
+    (accuracy, 'acc')
+]
 
 def check_auth(username, password):
     """Check if a username/password combination is valid."""
@@ -69,34 +78,20 @@ def process_json(data):
             return float(value)
         except ValueError:
             return 0
-    try:
-        lat = process_value(data.get('lat', 0))
-        lon = process_value(data.get('lon', 0))
-        batt = process_value(data.get('batt', 0))
-        #vel = process_value(data['vel'])
-        alt = process_value(data.get('alt', 0))
-        acc = process_value(data.get('acc', 0))
-
-        # Update Prometheus metrics
-        location_lat.set(lat)
-        location_lon.set(lon)
-        battery_level.set(batt)
-        #velocity.set(vel)
-        altitude.set(alt)
-        accuracy.set(acc)
-        logger.debug(f"Processed data: lat={lat}, lon={lon}, batt={batt}, alt={alt}, acc={acc}")
-        return True
-    
-    except (ValueError) as e:
-        logger.error(f"Error processing data: {data}. Error: {e}")
-        return False
+    for prometheus_obj, key in prometheus_obj_and_parameters:
+        try:
+            value = process_value(data[key])
+            prometheus_obj.set(value)
+            logger.debug(f"Set {prometheus_obj} to {value}")
+        except:
+            logger.error(f"Error setting {prometheus_obj} to {value}")
+    return True
 
 @app.route('/api', methods=['POST'])
 @requires_auth
 def receive_json():
     if request.is_json:
         data = request.get_json()
-
         # Check if the data is a list (i.e., multiple JSONs sent at once)
         if isinstance(data, list):
             logger.debug(f"Received a batch of {len(data)} JSON objects.")
