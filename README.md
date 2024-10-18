@@ -23,6 +23,6 @@ FLASK_PORT=5000
 4. configure phontrack on your phone with authentication 
 
 ## Notes
-- **DISCLAIMER**: there are a few things that are not best practice, s.a. saving the pw in the .env and comparing it in plaintext for the auth, make sure your know what you are doing. This is just a boilerplate for people who are too lazy to reverse engineer the readings of the phonetrack json
+- **DISCLAIMER**: there are a few things that are not best practice, make sure your know what you are doing. This is just a boilerplate for people who are too lazy to reverse engineer the readings of the phonetrack json
 - Will only work when the phone is online, does not store the time when stat was sent from phone
 - With this setup, we only handle local network incoming requests obvs.
