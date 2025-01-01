@@ -8,9 +8,9 @@ use std::sync::Mutex;
 use std::collections::HashMap;
 use serde_json::Value;
 use std::thread;
-use prometheus::{Encoder, TextEncoder, Counter, Opts, Registry, core::Collector};
+use prometheus::{Encoder, TextEncoder};
 
-fn handle_client(mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String, Value>>>, request_counter: Counter) {
+fn handle_client(mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String, Value>>>) {
     let mut buffer = [0; 512];
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer[..]);
@@ -53,19 +53,34 @@ fn handle_post_api(request: String, mut stream: std::net::TcpStream, data: Arc<M
     stream.flush().unwrap();
 }
 
+
 fn handle_get_metrics(_request: String, mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String, Value>>>) {
     let encoder = TextEncoder::new();
     let mut buffer = Vec::new();
     let data = data.lock().unwrap();
 
+    let key_rename_map = HashMap::from([
+        ("_type", ("phonetrack_type", "Type of the phonetrack data")),
+        ("acc", ("phonetrack_accuracy", "Accuracy of the phonetrack data")),
+        ("alt", ("phonetrack_altitude", "Altitude of the phonetrack data")),
+        ("batt", ("phonetrack_battery", "Battery level of the phonetrack device")),
+        ("lat", ("phonetrack_latitude", "Latitude of the phonetrack data")),
+        ("lon", ("phonetrack_longitude", "Longitude of the phonetrack data")),
+        ("tst", ("phonetrack_timestamp", "Timestamp of the phonetrack data")),
+        ("vel", ("phonetrack_velocity", "Velocity of the phonetrack data")),
+        ("tid", ("phonetrack_tracker_id", "Tracker ID of the phonetrack data")),
+    ]);
+
     let mut metrics = Vec::new();
     if let Some(api_data) = data.get("api_data") {
         if let Some(obj) = api_data.as_object() {
             for (key, value) in obj {
+                let key_str = key.as_str();
+                let (renamed_key, description) = key_rename_map.get(key_str).map(|v| *v).unwrap_or((key_str, "No description available"));
                 if let Some(val) = value.as_str() {
-                    metrics.push(format!("{} {}", key, val));
+                    metrics.push(format!("# HELP {} {}\n# TYPE {} gauge\n{} {}", renamed_key, description, renamed_key, renamed_key, val));
                 } else if let Some(val) = value.as_i64() {
-                    metrics.push(format!("{} {}", key, val));
+                    metrics.push(format!("# HELP {} {}\n# TYPE {} gauge\n{} {}", renamed_key, description, renamed_key, renamed_key, val));
                 }
             }
         }
@@ -85,6 +100,7 @@ fn handle_get_metrics(_request: String, mut stream: std::net::TcpStream, data: A
     stream.flush().unwrap();
 }
 
+
 fn main() {
     dotenv().ok();
     let ip = env::var("RUST_HOST").expect("IP_ADDRESS environment variable not set");
@@ -93,17 +109,12 @@ fn main() {
     let listener = TcpListener::bind(&address).unwrap();
     let data = Arc::new(Mutex::new(HashMap::new()));
 
-    let request_counter = Counter::with_opts(Opts::new("requests_total", "Total number of requests received")).unwrap();
-    let registry = Registry::new();
-    registry.register(Box::new(request_counter.clone())).unwrap();
-
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         let data = Arc::clone(&data);
-        let request_counter = request_counter.clone();
 
         thread::spawn(move || {
-            handle_client(stream, data, request_counter);
+            handle_client(stream, data);
         });
     }
 }
