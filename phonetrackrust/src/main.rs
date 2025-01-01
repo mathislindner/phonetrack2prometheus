@@ -20,7 +20,7 @@ fn handle_client(mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String
     if request.starts_with("POST /api HTTP/1.1") {
         handle_post_api(request.to_string(), stream, data);
     } else if request.starts_with("GET /metrics HTTP/1.1") {
-        handle_get_metrics(request.to_string(), stream, request_counter);
+        handle_get_metrics(request.to_string(), stream, data);
     }
 }
 
@@ -35,7 +35,7 @@ fn handle_post_api(request: String, mut stream: std::net::TcpStream, data: Arc<M
     let body_start = request.find("\r\n\r\n").unwrap() + 4; // Skip the headers
     let body = &request[body_start..body_start + content_length];
 
-    println!("Body to parse: '{}'", body);
+    //println!("Body to parse: '{}'", body);
 
     let json: Value = match serde_json::from_str(body.trim()) {
         Ok(val) => val,
@@ -48,19 +48,32 @@ fn handle_post_api(request: String, mut stream: std::net::TcpStream, data: Arc<M
     let mut data = data.lock().unwrap();
     data.insert("api_data".to_string(), json);
     println!("{:?}", *data);
-    update_metrics(&data);
-    println!("{:?}", *data);
     let response = "HTTP/1.1 200 OK\r\n\r\n";
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
 }
 
-fn handle_get_metrics(_request: String, mut stream: std::net::TcpStream, request_counter: Counter) {
-    request_counter.inc();
-
+fn handle_get_metrics(_request: String, mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String, Value>>>) {
     let encoder = TextEncoder::new();
     let mut buffer = Vec::new();
-    encoder.encode(&request_counter.collect(), &mut buffer).unwrap();
+    let data = data.lock().unwrap();
+
+    let mut metrics = Vec::new();
+    if let Some(api_data) = data.get("api_data") {
+        if let Some(obj) = api_data.as_object() {
+            for (key, value) in obj {
+                if let Some(val) = value.as_str() {
+                    metrics.push(format!("{} {}", key, val));
+                } else if let Some(val) = value.as_i64() {
+                    metrics.push(format!("{} {}", key, val));
+                }
+            }
+        }
+    }
+
+    let metrics_str = metrics.join("\n");
+    buffer.extend_from_slice(metrics_str.as_bytes());
+    encoder.encode(&[], &mut buffer).unwrap();
 
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
