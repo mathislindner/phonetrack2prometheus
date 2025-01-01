@@ -9,6 +9,29 @@ use std::collections::HashMap;
 use serde_json::Value;
 use std::thread;
 use prometheus::{Encoder, TextEncoder};
+use base64;
+
+
+fn check_credentials(request: &str) -> bool {
+    let valid_username = env::var("RUST_USERNAME").expect("USERNAME environment variable not set");
+    let valid_password = env::var("RUST_PASSWORD").expect("PASSWORD environment variable not set");
+
+    let auth_header = request.lines()
+        .find(|line| line.starts_with("Authorization: Basic"))
+        .and_then(|line| line.split_whitespace().nth(2));
+
+    if let Some(encoded_credentials) = auth_header {
+        if let Ok(decoded_credentials) = base64::decode(encoded_credentials) {
+            if let Ok(credentials) = String::from_utf8(decoded_credentials) {
+                let mut parts = credentials.splitn(2, ':');
+                let username = parts.next().unwrap_or("");
+                let password = parts.next().unwrap_or("");
+                return username == valid_username && password == valid_password;
+            }
+        }
+    }
+    false
+}
 
 fn handle_client(mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String, Value>>>) {
     let mut buffer = [0; 512];
@@ -18,6 +41,12 @@ fn handle_client(mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String
     println!("Received request: {}", request);
 
     if request.starts_with("POST /api HTTP/1.1") {
+        if !check_credentials(&request) {
+            let response = "HTTP/1.1 401 Unauthorized\r\n\r\n";
+            stream.write(response.as_bytes()).unwrap();
+            stream.flush().unwrap();
+            return;
+        }
         handle_post_api(request.to_string(), stream, data);
     } else if request.starts_with("GET /metrics HTTP/1.1") {
         handle_get_metrics(request.to_string(), stream, data);
