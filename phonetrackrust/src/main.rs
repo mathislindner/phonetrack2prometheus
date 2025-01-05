@@ -1,14 +1,14 @@
-use std::net::TcpListener;
-use std::env;
-use dotenv::dotenv;
-use std::io::Read;
-use std::io::Write;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::collections::HashMap;
-use serde_json::Value;
+use std::env;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::sync::{Arc, Mutex};
 use std::thread;
-use prometheus::{Encoder, TextEncoder};
+
+use log::{debug, error, log_enabled, info, Level};
+use dotenv::dotenv;
+use serde_json::Value;
+use prometheus::{Encoder, TextEncoder, GaugeVec, Opts, Registry};
 use base64;
 
 
@@ -38,18 +38,22 @@ fn handle_client(mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer[..]);
 
-    println!("Received request: {}", request);
+    info!("Received request: {}", request);
+    if !check_credentials(&request) {
+        let response = "HTTP/1.1 401 Unauthorized\r\n\r\n";
+        stream.write(response.as_bytes()).unwrap();
+        stream.flush().unwrap();
+        return;
+    }
 
-    if request.starts_with("POST /api HTTP/1.1") {
-        if !check_credentials(&request) {
-            let response = "HTTP/1.1 401 Unauthorized\r\n\r\n";
+    match request.split_whitespace().nth(1) {
+        Some("/api") if request.starts_with("POST") => handle_post_api(request.to_string(), stream, data),
+        Some("/metrics") if request.starts_with("GET") => handle_get_metrics(request.to_string(), stream, data),
+        _ => {
+            let response = "HTTP/1.1 404 Not Found\r\n\r\n";
             stream.write(response.as_bytes()).unwrap();
             stream.flush().unwrap();
-            return;
         }
-        handle_post_api(request.to_string(), stream, data);
-    } else if request.starts_with("GET /metrics HTTP/1.1") {
-        handle_get_metrics(request.to_string(), stream, data);
     }
 }
 
@@ -132,12 +136,14 @@ fn handle_get_metrics(_request: String, mut stream: std::net::TcpStream, data: A
 
 fn main() {
     dotenv().ok();
+    env_logger::init();
     let ip = env::var("RUST_HOST").expect("IP_ADDRESS environment variable not set");
     let port = env::var("RUST_PORT").expect("PORT environment variable not set");
     let address = format!("{}:{}", ip, port);
     let listener = TcpListener::bind(&address).unwrap();
     let data = Arc::new(Mutex::new(HashMap::new()));
 
+    info!("Server listening on {}", address);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         let data = Arc::clone(&data);
