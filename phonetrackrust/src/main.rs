@@ -34,6 +34,7 @@ fn check_credentials(request: &str) -> bool {
 }
 
 fn handle_client(mut stream: std::net::TcpStream, data: Arc<Mutex<HashMap<String, Value>>>) {
+    println!("New client connected: {}", stream.peer_addr().unwrap());
     let mut buffer = [0; 512];
     stream.read(&mut buffer).unwrap();
     let request = String::from_utf8_lossy(&buffer[..]);
@@ -131,13 +132,14 @@ fn handle_get_metrics(_request: String, mut stream: std::net::TcpStream, data: A
 
 
 fn main() {
+    println!("Starting server...");
     dotenv().ok();
     let ip = env::var("RUST_HOST").expect("IP_ADDRESS environment variable not set");
     let port = env::var("RUST_PORT").expect("PORT environment variable not set");
     let address = format!("{}:{}", ip, port);
     let listener = TcpListener::bind(&address).unwrap();
     let data = Arc::new(Mutex::new(HashMap::new()));
-
+    println!("Server started on {}", address);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         let data = Arc::clone(&data);
